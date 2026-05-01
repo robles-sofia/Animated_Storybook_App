@@ -1,5 +1,4 @@
 
-
 import SwiftUI
 
 struct StoryPage: Identifiable {
@@ -62,7 +61,11 @@ struct ContentView: View {
                                 RoundedRectangle(cornerRadius: 20)
                                     .fill(page.color)
                                     .frame(height: geo.size.height * 0.25)
-                                    .overlay(Text(page.title).foregroundColor(.white).font(.headline))
+                                    .overlay(
+                                        Text(page.title)
+                                            .foregroundColor(.white)
+                                            .font(.headline)
+                                    )
                                     .matchedGeometryEffect(id: page.id, in: animation)
                                     .onTapGesture {
                                         withAnimation(.spring()) {
@@ -80,99 +83,124 @@ struct ContentView: View {
                         }
                         .padding()
                     }
-                } else {
-                    //detail view
-                    if let page = selectedPage {
-                        ZStack {
-                            GeometryReader { geo in
-                                page.color
-                                    .offset(y: geo.frame(in: .global).minY * -0.2)
-                                    .ignoresSafeArea()
-                            }
-                            .matchedGeometryEffect(id: page.id, in: animation)
+                }
+                //detail view
+                else if let page = selectedPage {
+                    
+                    let storyParts = page.text
+                        .components(separatedBy: ".")
+                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    
+                    
+                    ZStack {
+                        //parallax background
+                        GeometryReader { geo in
+                            page.color
+                                .offset(y: geo.frame(in: .global).minY * -0.3)
+                                .ignoresSafeArea()
+                        }
+                        .matchedGeometryEffect(id: page.id, in: animation)
+                        
+                        VStack (spacing: 20) {
+                            Text(page.title)
+                                .font(.largeTitle)
+                                .bold()
+                                .foregroundColor(.white)
                             
-                            VStack (spacing: 20) {
-                                Text(page.title)
-                                    .font(.largeTitle)
-                                    .bold()
-                                    .foregroundColor(.white)
-                                
-                                //tap to show text
-                                let storyParts = page.text.components(separatedBy: ".")
-                                
-                                VStack {
-                                    ForEach(0..<textIndex, id: \.self) { i in
-                                        Text(storyParts[i] + ".")
-                                            .foregroundColor(.white)
-                                            .transition(.opacity)
-                                    }
+                            //tap to show text
+                            VStack {
+                                ForEach(0..<textIndex, id: \.self) { i in
+                                    Text(storyParts[i] + ".")
+                                        .foregroundColor(.white)
+                                        .transition(.opacity)
                                 }
-                                
-                                //interactive object
-                                Circle()
-                                    .fill(Color.white)
-                                    .frame(width: 80, height: 80)
-                                    .scaleEffect(scale)
-                                    .rotationEffect(rotation)
-                                    .offset(dragOffset)
-                                    .animation(.spring(response: 0.4, dampingFraction: 0.5), value: scale)
-                                    .animation(.easeInOut, value: rotation)
-                                    .gesture(
-                                        SimultaneousGesture(
-                                            MagnificationGesture()
-                                                .onChanged { value in
-                                                    scale = value
-                                                },
-                                            RotationGesture()
-                                                .onChanged { value in
-                                                    rotation = value
-                                                }
-                                        )
+                            }
+                            
+                            //interactive object
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 80, height: 80)
+                                .scaleEffect(scale)
+                                .rotationEffect(rotation)
+                                .offset(dragOffset)
+                                .gesture(
+                                    SimultaneousGesture(
+                                        MagnificationGesture()
+                                            .onChanged { scale = $0 },
+                                        RotationGesture()
+                                            .onChanged { rotation = $0 }
                                     )
-                                    .gesture(
-                                            DragGesture()
-                                                .onChanged { value in
-                                                    dragOffset = value.translation
-                                                }
-                                                .onEnded { _ in
-                                                    withAnimation(.spring()) {
-                                                        dragOffset = .zero
-                                                    }
-                                                }
-                                        )
-                                
-                                Button("Back") {
-                                    withAnimation(.easeInOut) {
-                                        selectedPage = nil
+                                )
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { dragOffset = $0.translation }
+                                        .onEnded { _ in
+                                            withAnimation(.spring()) {
+                                                dragOffset = .zero
+                                            }
+                                        }
+                                )
+                            
+                            //bounce animation on tap
+                                .onTapGesture {
+                                    withAnimation(.interpolatingSpring(stiffness: 200, damping: 5)) {
+                                        scale = 1.5
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        scale = 1.0
                                     }
                                 }
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(10)
+                            
+                            //hidden unlock content
+                            if unlocked {
+                                Text("You've discovered a hidden path!")
+                                    .foregroundColor(.yellow)
+                                    .transition(.scale)
+                            }
+                            
+                            
+                            Button("Back") {
+                                withAnimation(.easeInOut) {
+                                    selectedPage = nil
+                                }
                             }
                             .padding()
+                            .background(Color.white)
+                            .cornerRadius(10)
+                        }
+                        .padding()
+                    }
+                    .contentShape(Rectangle())
+                    
+                    .onTapGesture {
+                        withAnimation {
+                            if textIndex < storyParts.count {
+                                textIndex += 1
+                            }
+                        }
+                    }
                             
-                            //gestures for story and sequence
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation {
-                                    
-                                    if textIndex < storyParts.count {
-                                        textIndex += 1
+                            //sequenced gesture (long press and tap)
+                    .gesture(
+                        LongPressGesture(minimumDuration: 1.0)
+                            .sequenced(before: TapGesture())
+                            .onEnded { value in
+                                switch value {
+                                case.second(true, _):
+                                    withAnimation(.spring()) {
+                                        unlocked = true
                                     }
+                                default:
+                                    break
                                 }
                             }
-                            let storyParts = page.text
-                                .components(separatedBy: ".")
-                                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                        }
+                        )
                         .transition(.scale)
                     }
                 }
             }
         }
     }
-}
 
 
 
